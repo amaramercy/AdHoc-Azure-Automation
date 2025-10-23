@@ -1,45 +1,60 @@
-# 🚀 Ad-Hoc Automation on Azure — 3 VMs, Inventory & Passwordless SSH
+# 🚀 Ad-Hoc Automation on Azure — Multi-VM Deployment with Terraform & Ansible
+
+This project demonstrates **automating infrastructure provisioning and application deployment** on Azure using Terraform and Ansible ad-hoc commands.
+
+---
 
 ## 🎯 Objective
-Provision a small Azure fleet with Terraform (3 Linux VMs), set up passwordless SSH, create a custom Ansible inventory, and run ad-hoc commands (ping, uptime, package install, service restart) targeting hosts and groups with `--become` where needed.
+Provision a small Azure fleet (3 Linux VMs), set up **passwordless SSH**, create a custom **Ansible inventory**, and run ad-hoc commands to deploy Dockerized applications (`Mexant` and `Mediplus`) without writing playbooks.
+
+---
 
 ## 🏢 Real-World Scenario
-This mirrors a real-world DevOps scenario where engineers spin up dev/test VMs, ensure secure access, and perform fleet-wide actions in seconds without writing a playbook.
+Engineers need to quickly spin up dev/test environments, ensure secure access, and deploy applications consistently. This project mirrors a real-world DevOps workflow:
+
+1. **Terraform** provisions infrastructure (VMs, networking, NSG rules, public IPs).  
+2. **Ansible ad-hoc commands** verify connectivity, manage Docker containers, and deploy apps.  
+
+---
 
 ## ⚡ Prerequisites
 - Azure CLI authenticated
 - Terraform installed
-- SSH key ready: `~/.ssh/id_ed25519` (or create one)
-- Ubuntu 22.04 LTS image preferred
+- SSH key: `~/.ssh/id_ed25519`
+- Ubuntu 22.04 LTS image
 
-## 📁 Project Folder Structure
+---
+
+## 📂 Project Structure
 ```text
-C:\Users\USER\Downloads\Assignment-34
-│   inventory.ini
-└───terraform
-        main.tf
-        output.tf
-        provider.tf
-        terraform.tfvars
-        variables.tf
-        .terraform/ (ignore this in git)
-        .terraform.lock.hcl
-inventory.ini → Ansible inventory mapping IPs to web, app, and db groups
+Assignment-34/
+│
+├── terraform/
+│   ├── main.tf
+│   ├── provider.tf
+│   ├── output.tf
+│   ├── terraform.tfvars
+│   ├── variables.tf
+│   └── .gitignore
+│
+├── inventory.ini
+└── README.md
+terraform/ → Terraform configuration to provision Azure VMs
 
-terraform/ → Terraform files used to provision Azure resources
+inventory.ini → Ansible inventory mapping IPs to web, app, db groups
 
 🛠 Terraform Setup
 Provisioned:
 
-3 Linux VMs (web, app, db)
+3 Linux VMs (2 web, 1 app, 1 db)
 
 VNet and Subnet
 
-NSG allowing SSH (22), HTTP (80), and app port (8080)
+NSG allowing SSH (22), HTTP (80), and App port (8080)
 
-Network Interfaces + Public IPs
+Public IPs for Ansible inventory
 
-Run Terraform:
+Commands:
 
 bash
 Copy code
@@ -47,37 +62,23 @@ terraform init
 terraform plan
 terraform apply -auto-approve
 terraform output public_ips
-🔑 Step 1 — Connect to VMs via SSH
-bash
-Copy code
-ssh azureuser@<VM_PUBLIC_IP>
-Enter the password set in Terraform (Demo@12345678) for initial login.
-
-🔑 Step 2 — Setup Passwordless SSH
-From your control node (Windows PowerShell):
+🔑 Passwordless SSH
+Generate key on control VM (if not already):
 
 bash
 Copy code
-# VM 1
-Get-Content $env:USERPROFILE\.ssh\id_rsa.pub | ssh azureuser@172.201.50.146 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+ssh-keygen -t ed25519
+Copy public key to all VMs:
 
-# VM 2
-Get-Content $env:USERPROFILE\.ssh\id_rsa.pub | ssh azureuser@172.201.187.117 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-
-# VM 3
-Get-Content $env:USERPROFILE\.ssh\id_rsa.pub | ssh azureuser@4.210.203.149 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-Test login:
+bash
+Copy code
+ssh-copy-id azureuser@<VM_PUBLIC_IP>
+Test with:
 
 bash
 Copy code
 ssh azureuser@<VM_PUBLIC_IP>
-🔑 Step 3 — Install Ansible (on Control VM)
-bash
-Copy code
-sudo apt update
-sudo apt install -y ansible
-ansible --version
-🔑 Step 4 — Create Ansible Inventory
+🔑 Ansible Inventory
 inventory.ini:
 
 ini
@@ -90,64 +91,53 @@ Copy code
 4.210.203.149
 
 [db]
-<db_vm_ip>
+<db-ip>
 
 [all:vars]
 ansible_user=azureuser
-ansible_ssh_private_key_file=~/.ssh/id_rsa
-🔑 Step 5 — Verify Ansible Connectivity
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+🔧 Ad-Hoc Commands
+Verify connectivity:
+
 bash
 Copy code
 ansible all -i ~/inventory.ini -m ping
-🔑 Step 6 — Docker Commands (Ad-Hoc)
-Check Docker version:
+Check Docker installation:
 
 bash
 Copy code
 ansible all -i ~/inventory.ini -a "docker --version"
+Deploy Mexant app on all web servers:
+
+bash
+Copy code
+ansible all -i ~/inventory.ini -a "docker run -d -p 80:80 --name mexant amaracloud/mexant:v4" --become
+Deploy Mediplus app on app server:
+
+bash
+Copy code
+ansible app -i ~/inventory.ini -a "docker run -d -p 8080:80 --name mediplus amaracloud/mediplus:v2" --become
 Check running containers:
 
 bash
 Copy code
 ansible all -i ~/inventory.ini -a "docker ps" --become
-Stop nginx if blocking ports:
+Stop nginx (if blocking ports):
 
 bash
 Copy code
 ansible web -i ~/inventory.ini -a "bash -c 'sudo systemctl stop nginx && sudo systemctl disable nginx'" --become
-🔑 Step 7 — Deploy Applications with Ansible Ad-Hoc
-Deploy Mexant on all web VMs (port 80):
-
-bash
-Copy code
-ansible all -i ~/inventory.ini -a "docker run -d -p 80:80 --name mexant amaracloud/mexant:v4" --become
-Deploy Mediplus on app VM (port 8080):
-
-bash
-Copy code
-ansible app -i ~/inventory.ini -a "docker run -d -p 8080:80 --name mediplus amaracloud/mediplus:v2" --become
-Verify containers:
-
-bash
-Copy code
-ansible all -i ~/inventory.ini -a "docker ps" --become
 🌍 Real-World Application
-This exercise mirrors a real-world DevOps workflow:
-
-Terraform provisions infrastructure
-
-Ansible manages configuration and deployments efficiently
-
-Quick ad-hoc commands allow testing and verification before writing playbooks
+This exercise mirrors a real-world DevOps scenario where Terraform provisions infrastructure, and Ansible manages configuration and deployments efficiently.
 
 💡 Key Takeaways
 Passwordless SSH simplifies automation securely
 
-Ad-hoc commands are perfect for quick fixes and verification
+Ad-hoc commands are perfect for quick fixes, testing, or verifying configs
 
-Playbooks are ideal for repeatable, structured deployments
+📖 Documentation
+
+Check out the full documentation with screenshots and steps: https://medium.com/@amaramercy27/ad-hoc-automation-on-azure-3-vms-inventory-passwordless-ssh-c92e9a84f07e
+Playbooks are ideal for repeatable or structured deployments
 
 Combining Terraform + Ansible bridges provisioning and configuration seamlessly
-
-🎥 Final Thoughts
-From provisioning with Terraform to deploying containers with Ansible, managing multiple VMs now feels effortless. Fleet automation feels like magic ⚡ — powered by SSH, YAML, and Docker!
