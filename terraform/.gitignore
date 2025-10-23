@@ -1,0 +1,12 @@
+# Ignore Terraform local state files
+*.tfstate
+*.tfstate.backup
+
+# Ignore Terraform hidden folder with plugins
+.terraform/
+
+# Ignore sensitive variable files
+*.tfvars
+
+# Ignore lock file if you prefer (optional)
+.terraform.lock.hcl
